@@ -1,5 +1,4 @@
 import os
-from datetime import datetime
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
@@ -38,18 +37,18 @@ symptoms_map = {
     3: "тревога без причины",
     4: "навязчивые мысли",
     5: "внутреннее напряжение",
-    6: "потеря интереса к привычным вещам",
+    6: "потеря интереса",
     7: "ощущение пустоты",
-    8: "сложно начать что-то делать",
+    8: "сложно начать делать дела",
     9: "раздражительность",
     10: "проблемы с концентрацией",
     11: "проблемы со сном",
     12: "избегание общения",
-    13: "сложности с принятием решений",
+    13: "сложности с решениями",
     14: "ощущение, что не справляешься",
     15: "чувство вины",
     16: "физическое напряжение",
-    17: "мысли о том, чтобы всё остановилось",
+    17: "мысли всё остановить",
 }
 
 users = {}
@@ -66,62 +65,91 @@ def keyboard(q):
         ]
     ])
 
-def progress_bar(current, total):
-    filled = int((current / total) * 10)
-    return "🟦" * filled + "⬜" * (10 - filled)
-
 def level(score):
     if score <= 5: return "низкий"
     elif score <= 10: return "средний"
     else: return "высокий"
 
-# 🧠 ПРОФИЛЬ
+# 🧠 Профиль
 def get_profile(stress, anxiety, depression):
     if depression == "высокий":
-        return "Истощённое состояние"
+        return "эмоциональное истощение"
     if stress == "высокий" and anxiety == "высокий":
-        return "Перегруженное и тревожное состояние"
+        return "сильная перегрузка с тревожностью"
     if stress == "высокий":
-        return "Перегруженное состояние"
+        return "перегрузка"
     if anxiety == "высокий":
-        return "Тревожное состояние"
-    return "Сбалансированное состояние"
+        return "повышенная тревожность"
+    return "относительно стабильное состояние"
 
-# 💡 СОВЕТЫ
+# 🧠 Развёрнутый анализ
+def build_analysis(user, profile):
+    strong = [symptoms_map[q] for q, val in user["answers"] if val >= 2]
+
+    text = ""
+
+    if strong:
+        text += "По твоим ответам видно, что сейчас у тебя проявляются такие состояния:\n"
+        text += "— " + "\n— ".join(strong[:5]) + "\n\n"
+
+    if "истощение" in profile:
+        text += (
+            "Это похоже на состояние эмоционального истощения. "
+            "Обычно оно возникает, когда человек долго живёт в режиме напряжения "
+            "и не успевает восстанавливаться. Может ощущаться пустота, отсутствие энергии "
+            "и сложности даже с простыми задачами.\n\n"
+        )
+
+    elif "перегрузка" in profile:
+        text += (
+            "Сейчас состояние похоже на перегрузку. Когда задач и напряжения становится слишком много, "
+            "организм начинает сигналить через усталость, раздражительность и трудности с концентрацией.\n\n"
+        )
+
+    elif "тревожность" in profile:
+        text += (
+            "Есть признаки повышенной тревожности. Это может ощущаться как постоянное внутреннее напряжение, "
+            "невозможность расслабиться и прокручивание мыслей.\n\n"
+        )
+
+    else:
+        text += (
+            "В целом состояние выглядит стабильным. Нет выраженных признаков сильной перегрузки или истощения.\n\n"
+        )
+
+    text += "Это не диагноз, а сигнал от твоей психики о текущем состоянии.\n"
+
+    return text
+
+# 💡 советы
 def get_advice(profile):
-    if "Истощённое" in profile:
+    if "истощение" in profile:
         return (
             "— снизить нагрузку\n"
-            "— больше сна и восстановления\n"
-            "— не изолироваться от людей"
+            "— больше отдыха и сна\n"
+            "— не оставаться в изоляции"
         )
-    if "Перегруженное и тревожное" in profile:
+    if "перегрузка" in profile:
         return (
-            "— сократить поток информации\n"
-            "— дать себе паузы в течение дня\n"
-            "— снизить требования к себе"
+            "— сократить задачи\n"
+            "— делать паузы\n"
+            "— снизить давление на себя"
         )
-    if "Перегруженное" in profile:
+    if "тревожность" in profile:
         return (
-            "— уменьшить количество задач\n"
-            "— добавить отдых\n"
-            "— не перегружать себя"
-        )
-    if "Тревожное" in profile:
-        return (
-            "— меньше перегрузки новостями\n"
-            "— больше спокойных активностей\n"
+            "— уменьшить поток информации\n"
+            "— добавить спокойные активности\n"
             "— замедлить ритм"
         )
-    return "— продолжать в том же темпе\n— следить за балансом"
+    return "— продолжать в том же духе"
 
 def build_summary(user):
     strong = [symptoms_map[q] for q, val in user["answers"] if val >= 2]
 
-    text = "Ты прошёл тест. Вот что видно:\n\n"
+    text = "Ты прошёл тест.\n\n"
 
     if strong:
-        text += "Чаще всего отмечалось:\n"
+        text += "Чаще всего ты отмечал:\n"
         text += "— " + "\n— ".join(strong[:4]) + "\n\n"
 
     text += "Похоже, это состояние формировалось постепенно.\n\n"
@@ -130,14 +158,26 @@ def build_summary(user):
     return text
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = (
+        "🧠 Привет!\n\n"
+        "Это короткий тест, который поможет понять твоё состояние:\n"
+        "— стресс\n"
+        "— тревожность\n"
+        "— признаки выгорания\n\n"
+        "⏱ ~2 минуты\n\n"
+        "📊 Как отвечать:\n"
+        "0 — нет\n"
+        "1 — иногда\n"
+        "2 — часто\n"
+        "3 — почти всегда\n\n"
+        "Нажми кнопку ниже 👇"
+    )
+
     kb = InlineKeyboardMarkup([[
         InlineKeyboardButton("Начать тест", callback_data="start_test")
     ]])
 
-    await update.message.reply_text(
-        "🧠 Тест состояния\n\nЖми 👇",
-        reply_markup=kb
-    )
+    await update.message.reply_text(text, reply_markup=kb)
 
 async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -148,10 +188,8 @@ async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data == "start_test":
         users[user_id] = {"q": 0, "stress": 0, "anxiety": 0, "depression": 0, "answers": []}
 
-        bar = progress_bar(1, len(questions))
-
         await query.edit_message_text(
-            f"{bar}\nВопрос 1/{len(questions)}\n\n{questions[0][0]}",
+            f"Вопрос 1/{len(questions)}\n\n{questions[0][0]}",
             reply_markup=keyboard(0)
         )
         return
@@ -164,14 +202,13 @@ async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         depression = level(u["depression"])
 
         profile = get_profile(stress, anxiety, depression)
+        analysis = build_analysis(u, profile)
         advice = get_advice(profile)
 
         text = (
             f"📊 Результат\n\n"
-            f"Профиль: {profile}\n\n"
-            f"Стресс: {stress}\n"
-            f"Тревожность: {anxiety}\n"
-            f"Состояние: {depression}\n\n"
+            f"Состояние: {profile}\n\n"
+            f"{analysis}\n\n"
             f"💡 Что можно сделать:\n{advice}"
         )
 
@@ -192,10 +229,9 @@ async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if users[user_id]["q"] < len(questions):
         next_q = users[user_id]["q"]
-        bar = progress_bar(next_q + 1, len(questions))
 
         await query.message.reply_text(
-            f"{bar}\nВопрос {next_q+1}/{len(questions)}\n\n{questions[next_q][0]}",
+            f"Вопрос {next_q+1}/{len(questions)}\n\n{questions[next_q][0]}",
             reply_markup=keyboard(next_q)
         )
     else:
