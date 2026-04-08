@@ -31,6 +31,27 @@ questions = [
 ("Я думаю о том, чтобы всё остановилось", "depression"),
 ]
 
+symptoms_map = {
+    0: "трудно расслабиться",
+    1: "усталость даже после отдыха",
+    2: "ощущение перегруженности",
+    3: "тревога без причины",
+    4: "навязчивые мысли",
+    5: "внутреннее напряжение",
+    6: "потеря интереса к привычным вещам",
+    7: "ощущение пустоты",
+    8: "сложно начать что-то делать",
+    9: "раздражительность",
+    10: "проблемы с концентрацией",
+    11: "проблемы со сном",
+    12: "избегание общения",
+    13: "сложности с принятием решений",
+    14: "ощущение, что не справляешься",
+    15: "чувство вины",
+    16: "физическое напряжение",
+    17: "мысли о том, чтобы всё остановилось",
+}
+
 users = {}
 history = {}
 
@@ -47,14 +68,33 @@ def level(score):
     elif score <= 10: return "средний"
     else: return "высокий"
 
-def ai_comment(stress, anxiety, depression):
-    if depression == "высокий":
-        return "Похоже на сильное эмоциональное истощение. Важно снизить нагрузку и не оставаться в изоляции."
-    if anxiety == "высокий":
-        return "Похоже на повышенную тревожность. Возможно, стоит снизить поток информации и дать себе больше спокойствия."
-    if stress == "высокий":
-        return "Высокий уровень стресса. Организм сигналит о перегрузке — стоит притормозить."
-    return "Состояние в пределах нормы. Главное — поддерживать баланс."
+def build_analysis(user):
+    answers = user["answers"]
+
+    strong = []
+    medium = []
+
+    for q, val in answers:
+        if val >= 2:
+            strong.append(symptoms_map[q])
+        elif val == 1:
+            medium.append(symptoms_map[q])
+
+    text = ""
+
+    if strong:
+        text += "Сейчас у тебя заметны такие состояния:\n"
+        text += ", ".join(strong[:5]) + ".\n\n"
+
+    if medium:
+        text += "Также частично проявляется:\n"
+        text += ", ".join(medium[:3]) + ".\n\n"
+
+    text += "Это выглядит как накопленная нагрузка и эмоциональное напряжение.\n\n"
+
+    text += "Важно понимать: это не слабость, а сигнал, что ресурсы заканчиваются.\n"
+
+    return text
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
@@ -100,7 +140,8 @@ async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "q": 0,
             "stress": 0,
             "anxiety": 0,
-            "depression": 0
+            "depression": 0,
+            "answers": []
         }
 
         await query.edit_message_text(
@@ -110,6 +151,8 @@ async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     q, val = map(int, query.data.split("_"))
+
+    users[user_id]["answers"].append((q, val))
     category = questions[q][1]
 
     users[user_id][category] += val
@@ -128,9 +171,8 @@ async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         anxiety_lvl = level(u["anxiety"])
         depression_lvl = level(u["depression"])
 
-        comment = ai_comment(stress_lvl, anxiety_lvl, depression_lvl)
+        comment = build_analysis(u)
 
-        # сохраняем историю
         entry = {
             "date": datetime.now().strftime("%d.%m %H:%M"),
             "stress": stress_lvl,
@@ -145,7 +187,7 @@ async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Стресс: {stress_lvl}\n"
             f"Тревожность: {anxiety_lvl}\n"
             f"Состояние: {depression_lvl}\n\n"
-            f"🧠 Анализ:\n{comment}"
+            f"🧠 Разбор:\n\n{comment}"
         )
 
         kb = InlineKeyboardMarkup([[
