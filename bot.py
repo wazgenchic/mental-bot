@@ -53,7 +53,6 @@ symptoms_map = {
 }
 
 users = {}
-history = {}
 
 def keyboard(q):
     return InlineKeyboardMarkup([
@@ -69,78 +68,76 @@ def keyboard(q):
 
 def progress_bar(current, total):
     filled = int((current / total) * 10)
-    empty = 10 - filled
-    return "🟦" * filled + "⬜" * empty
+    return "🟦" * filled + "⬜" * (10 - filled)
 
 def level(score):
     if score <= 5: return "низкий"
     elif score <= 10: return "средний"
     else: return "высокий"
 
-def build_analysis(user):
-    answers = user["answers"]
+# 🧠 ПРОФИЛЬ
+def get_profile(stress, anxiety, depression):
+    if depression == "высокий":
+        return "Истощённое состояние"
+    if stress == "высокий" and anxiety == "высокий":
+        return "Перегруженное и тревожное состояние"
+    if stress == "высокий":
+        return "Перегруженное состояние"
+    if anxiety == "высокий":
+        return "Тревожное состояние"
+    return "Сбалансированное состояние"
 
-    strong = []
-    medium = []
+# 💡 СОВЕТЫ
+def get_advice(profile):
+    if "Истощённое" in profile:
+        return (
+            "— снизить нагрузку\n"
+            "— больше сна и восстановления\n"
+            "— не изолироваться от людей"
+        )
+    if "Перегруженное и тревожное" in profile:
+        return (
+            "— сократить поток информации\n"
+            "— дать себе паузы в течение дня\n"
+            "— снизить требования к себе"
+        )
+    if "Перегруженное" in profile:
+        return (
+            "— уменьшить количество задач\n"
+            "— добавить отдых\n"
+            "— не перегружать себя"
+        )
+    if "Тревожное" in profile:
+        return (
+            "— меньше перегрузки новостями\n"
+            "— больше спокойных активностей\n"
+            "— замедлить ритм"
+        )
+    return "— продолжать в том же темпе\n— следить за балансом"
 
-    for q, val in answers:
-        if val >= 2:
-            strong.append(symptoms_map[q])
-        elif val == 1:
-            medium.append(symptoms_map[q])
+def build_summary(user):
+    strong = [symptoms_map[q] for q, val in user["answers"] if val >= 2]
 
-    text = ""
+    text = "Ты прошёл тест. Вот что видно:\n\n"
 
     if strong:
-        text += "Сейчас у тебя заметны такие состояния:\n"
-        text += ", ".join(strong[:5]) + ".\n\n"
+        text += "Чаще всего отмечалось:\n"
+        text += "— " + "\n— ".join(strong[:4]) + "\n\n"
 
-    if medium:
-        text += "Также частично проявляется:\n"
-        text += ", ".join(medium[:3]) + ".\n\n"
-
-    text += "Это выглядит как накопленная нагрузка и эмоциональное напряжение.\n\n"
-    text += "Важно понимать: это не слабость, а сигнал, что ресурсы заканчиваются.\n"
+    text += "Похоже, это состояние формировалось постепенно.\n\n"
+    text += "Хочешь посмотреть разбор?"
 
     return text
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = (
-        "🧠 Привет!\n\n"
-        "Это тест для оценки состояния:\n"
-        "— стресс\n"
-        "— тревожность\n"
-        "— признаки выгорания\n\n"
-        "⏱ ~2 минуты\n\n"
-        "📊 Как отвечать:\n"
-        "0 — нет\n"
-        "1 — иногда\n"
-        "2 — часто\n"
-        "3 — почти всегда\n\n"
-        "Команда /history — посмотреть прошлые результаты\n\n"
-        "Жми 👇"
-    )
-
     kb = InlineKeyboardMarkup([[
         InlineKeyboardButton("Начать тест", callback_data="start_test")
     ]])
 
-    await update.message.reply_text(text, reply_markup=kb)
-
-async def show_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-
-    if user_id not in history or not history[user_id]:
-        await update.message.reply_text("История пока пуста 🙂")
-        return
-
-    text = "📊 Твоя история:\n\n"
-
-    for item in history[user_id][-5:]:
-        text += f"{item['date']}\n"
-        text += f"Стресс: {item['stress']}, Тревога: {item['anxiety']}, Состояние: {item['depression']}\n\n"
-
-    await update.message.reply_text(text)
+    await update.message.reply_text(
+        "🧠 Тест состояния\n\nЖми 👇",
+        reply_markup=kb
+    )
 
 async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -149,80 +146,70 @@ async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
 
     if query.data == "start_test":
-        users[user_id] = {
-            "q": 0,
-            "stress": 0,
-            "anxiety": 0,
-            "depression": 0,
-            "answers": []
-        }
+        users[user_id] = {"q": 0, "stress": 0, "anxiety": 0, "depression": 0, "answers": []}
 
         bar = progress_bar(1, len(questions))
 
         await query.edit_message_text(
-            f"{bar}\nВопрос 1/{len(questions)}\n\n{questions[0][0]}\n\n"
-            "(0 — нет, 1 — иногда, 2 — часто, 3 — почти всегда)",
+            f"{bar}\nВопрос 1/{len(questions)}\n\n{questions[0][0]}",
             reply_markup=keyboard(0)
         )
+        return
+
+    if query.data == "show_result":
+        u = users[user_id]
+
+        stress = level(u["stress"])
+        anxiety = level(u["anxiety"])
+        depression = level(u["depression"])
+
+        profile = get_profile(stress, anxiety, depression)
+        advice = get_advice(profile)
+
+        text = (
+            f"📊 Результат\n\n"
+            f"Профиль: {profile}\n\n"
+            f"Стресс: {stress}\n"
+            f"Тревожность: {anxiety}\n"
+            f"Состояние: {depression}\n\n"
+            f"💡 Что можно сделать:\n{advice}"
+        )
+
+        await query.edit_message_text(text)
         return
 
     q, val = map(int, query.data.split("_"))
 
     users[user_id]["answers"].append((q, val))
-    category = questions[q][1]
-
-    users[user_id][category] += val
+    users[user_id][questions[q][1]] += val
     users[user_id]["q"] += 1
 
     labels = ["Нет", "Иногда", "Часто", "Почти всегда"]
 
-    await query.edit_message_text(f"Вы выбрали: {labels[val]}")
+    await query.edit_message_text(
+        query.message.text + f"\n\nВаш ответ: {labels[val]}"
+    )
 
     if users[user_id]["q"] < len(questions):
         next_q = users[user_id]["q"]
         bar = progress_bar(next_q + 1, len(questions))
 
         await query.message.reply_text(
-            f"{bar}\nВопрос {next_q+1}/{len(questions)}\n\n{questions[next_q][0]}\n\n"
-            "(0 — нет, 1 — иногда, 2 — часто, 3 — почти всегда)",
+            f"{bar}\nВопрос {next_q+1}/{len(questions)}\n\n{questions[next_q][0]}",
             reply_markup=keyboard(next_q)
         )
     else:
-        u = users[user_id]
-
-        stress_lvl = level(u["stress"])
-        anxiety_lvl = level(u["anxiety"])
-        depression_lvl = level(u["depression"])
-
-        comment = build_analysis(u)
-
-        entry = {
-            "date": datetime.now().strftime("%d.%m %H:%M"),
-            "stress": stress_lvl,
-            "anxiety": anxiety_lvl,
-            "depression": depression_lvl
-        }
-
-        history.setdefault(user_id, []).append(entry)
-
-        text = (
-            f"📊 Результат:\n\n"
-            f"Стресс: {stress_lvl}\n"
-            f"Тревожность: {anxiety_lvl}\n"
-            f"Состояние: {depression_lvl}\n\n"
-            f"🧠 Разбор:\n\n{comment}"
-        )
+        summary = build_summary(users[user_id])
 
         kb = InlineKeyboardMarkup([[
-            InlineKeyboardButton("Пройти заново", callback_data="start_test")
+            InlineKeyboardButton("Посмотреть разбор", callback_data="show_result")
         ]])
 
-        await query.message.reply_text(text, reply_markup=kb)
+        await query.message.reply_text(summary, reply_markup=kb)
 
 app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("history", show_history))
 app.add_handler(CallbackQueryHandler(answer))
 
 app.run_polling()
