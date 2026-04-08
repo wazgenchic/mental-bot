@@ -56,12 +56,21 @@ users = {}
 history = {}
 
 def keyboard(q):
-    return InlineKeyboardMarkup([[
-        InlineKeyboardButton("0", callback_data=f"{q}_0"),
-        InlineKeyboardButton("1", callback_data=f"{q}_1"),
-        InlineKeyboardButton("2", callback_data=f"{q}_2"),
-        InlineKeyboardButton("3", callback_data=f"{q}_3"),
-    ]])
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("0 • Нет", callback_data=f"{q}_0"),
+            InlineKeyboardButton("1 • Иногда", callback_data=f"{q}_1"),
+        ],
+        [
+            InlineKeyboardButton("2 • Часто", callback_data=f"{q}_2"),
+            InlineKeyboardButton("3 • Почти всегда", callback_data=f"{q}_3"),
+        ]
+    ])
+
+def progress_bar(current, total):
+    filled = int((current / total) * 10)
+    empty = 10 - filled
+    return "🟦" * filled + "⬜" * empty
 
 def level(score):
     if score <= 5: return "низкий"
@@ -148,8 +157,10 @@ async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "answers": []
         }
 
+        bar = progress_bar(1, len(questions))
+
         await query.edit_message_text(
-            f"Вопрос 1/{len(questions)}\n\n{questions[0][0]}\n\n"
+            f"{bar}\nВопрос 1/{len(questions)}\n\n{questions[0][0]}\n\n"
             "(0 — нет, 1 — иногда, 2 — часто, 3 — почти всегда)",
             reply_markup=keyboard(0)
         )
@@ -163,10 +174,16 @@ async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     users[user_id][category] += val
     users[user_id]["q"] += 1
 
+    labels = ["Нет", "Иногда", "Часто", "Почти всегда"]
+
+    await query.edit_message_text(f"Вы выбрали: {labels[val]}")
+
     if users[user_id]["q"] < len(questions):
         next_q = users[user_id]["q"]
-        await query.edit_message_text(
-            f"Вопрос {next_q+1}/{len(questions)}\n\n{questions[next_q][0]}\n\n"
+        bar = progress_bar(next_q + 1, len(questions))
+
+        await query.message.reply_text(
+            f"{bar}\nВопрос {next_q+1}/{len(questions)}\n\n{questions[next_q][0]}\n\n"
             "(0 — нет, 1 — иногда, 2 — часто, 3 — почти всегда)",
             reply_markup=keyboard(next_q)
         )
@@ -200,7 +217,7 @@ async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("Пройти заново", callback_data="start_test")
         ]])
 
-        await query.edit_message_text(text, reply_markup=kb)
+        await query.message.reply_text(text, reply_markup=kb)
 
 app = ApplicationBuilder().token(TOKEN).build()
 
