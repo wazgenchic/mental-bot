@@ -91,7 +91,6 @@ def build_analysis(user):
         text += ", ".join(medium[:3]) + ".\n\n"
 
     text += "Это выглядит как накопленная нагрузка и эмоциональное напряжение.\n\n"
-
     text += "Важно понимать: это не слабость, а сигнал, что ресурсы заканчиваются.\n"
 
     return text
@@ -104,6 +103,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "— тревожность\n"
         "— признаки выгорания\n\n"
         "⏱ ~2 минуты\n\n"
+        "📊 Как отвечать:\n"
+        "0 — нет\n"
+        "1 — иногда\n"
+        "2 — часто\n"
+        "3 — почти всегда\n\n"
         "Команда /history — посмотреть прошлые результаты\n\n"
         "Жми 👇"
     )
@@ -145,7 +149,8 @@ async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
 
         await query.edit_message_text(
-            f"Вопрос 1/{len(questions)}\n\n{questions[0][0]}",
+            f"Вопрос 1/{len(questions)}\n\n{questions[0][0]}\n\n"
+            "(0 — нет, 1 — иногда, 2 — часто, 3 — почти всегда)",
             reply_markup=keyboard(0)
         )
         return
@@ -161,7 +166,8 @@ async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if users[user_id]["q"] < len(questions):
         next_q = users[user_id]["q"]
         await query.edit_message_text(
-            f"Вопрос {next_q+1}/{len(questions)}\n\n{questions[next_q][0]}",
+            f"Вопрос {next_q+1}/{len(questions)}\n\n{questions[next_q][0]}\n\n"
+            "(0 — нет, 1 — иногда, 2 — часто, 3 — почти всегда)",
             reply_markup=keyboard(next_q)
         )
     else:
