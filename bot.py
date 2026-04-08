@@ -1,5 +1,5 @@
 import os
-import urllib.parse  # 👈 ДОБАВИЛ
+import urllib.parse
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
@@ -155,7 +155,6 @@ def build_summary(user):
 
     return text
 
-# 👇 НОВАЯ ФУНКЦИЯ ДЛЯ ШАРИНГА
 def build_share_link(profile, analysis):
     text = f"Мой результат теста:\n\nСостояние: {profile}\n\n{analysis}"
     return f"https://t.me/share/url?text={urllib.parse.quote(text)}"
@@ -208,8 +207,6 @@ async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         analysis = build_analysis(u, profile)
         advice = get_advice(profile)
 
-        share_link = build_share_link(profile, analysis)  # 👈 НОВОЕ
-
         text = (
             f"📊 Результат\n\n"
             f"Состояние: {profile}\n\n"
@@ -217,9 +214,7 @@ async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"💡 Что можно сделать:\n{advice}"
         )
 
-        # 👇 ДОБАВИЛ КНОПКИ
         kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Поделиться результатом", url=share_link)],
             [InlineKeyboardButton("Пройти ещё раз", callback_data="start_test")]
         ])
 
