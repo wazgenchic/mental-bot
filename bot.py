@@ -1,4 +1,5 @@
 import os
+import urllib.parse  # 👈 ДОБАВИЛ
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
@@ -70,7 +71,6 @@ def level(score):
     elif score <= 10: return "средний"
     else: return "высокий"
 
-# 🧠 Профиль
 def get_profile(stress, anxiety, depression):
     if depression == "высокий":
         return "эмоциональное истощение"
@@ -82,7 +82,6 @@ def get_profile(stress, anxiety, depression):
         return "повышенная тревожность"
     return "относительно стабильное состояние"
 
-# 🧠 Развёрнутый анализ
 def build_analysis(user, profile):
     strong = [symptoms_map[q] for q, val in user["answers"] if val >= 2]
 
@@ -121,7 +120,6 @@ def build_analysis(user, profile):
 
     return text
 
-# 💡 советы
 def get_advice(profile):
     if "истощение" in profile:
         return (
@@ -156,6 +154,11 @@ def build_summary(user):
     text += "Хочешь посмотреть разбор?"
 
     return text
+
+# 👇 НОВАЯ ФУНКЦИЯ ДЛЯ ШАРИНГА
+def build_share_link(profile, analysis):
+    text = f"Мой результат теста:\n\nСостояние: {profile}\n\n{analysis}"
+    return f"https://t.me/share/url?text={urllib.parse.quote(text)}"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
@@ -205,6 +208,8 @@ async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         analysis = build_analysis(u, profile)
         advice = get_advice(profile)
 
+        share_link = build_share_link(profile, analysis)  # 👈 НОВОЕ
+
         text = (
             f"📊 Результат\n\n"
             f"Состояние: {profile}\n\n"
@@ -212,7 +217,13 @@ async def answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"💡 Что можно сделать:\n{advice}"
         )
 
-        await query.edit_message_text(text)
+        # 👇 ДОБАВИЛ КНОПКИ
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("Поделиться результатом", url=share_link)],
+            [InlineKeyboardButton("Пройти ещё раз", callback_data="start_test")]
+        ])
+
+        await query.edit_message_text(text, reply_markup=kb)
         return
 
     q, val = map(int, query.data.split("_"))
